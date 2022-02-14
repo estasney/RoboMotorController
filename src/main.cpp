@@ -1,13 +1,14 @@
 #include <Streaming.h>
 #include <RF24.h>
+#include <SPI.h>
 
 // Arduino pin numbers
 
-#define XR_pin 6 // analog pin connected to X output (right thumb)
-#define YR_pin 7 // analog pin connected to Y output (left thumb)
-#define XL_pin 0
-#define YL_pin 1
-#define LSWITCH_pin 5
+#define LY A2
+#define LX A1
+
+#define RX A3
+#define RY A0
 
 #define THROTTLE_LEFT
 #define CALIB_READINGS 25
@@ -15,15 +16,18 @@
 #define SMOOTHNESS_X 20
 #define SMOOTHNESS_Y 10
 #define RADIO_LEVEL RF24_PA_MAX
+#define RADIO_CE_PIN 7
+#define RADIO_CS_PIN 8
 
 //#define TESTING
+#define STDOUT
 
 #ifdef THROTTLE_LEFT
-const uint8_t X_pin = YR_pin;
-const uint8_t Y_pin = YL_pin;
+const uint8_t X_pin = LY;
+const uint8_t Y_pin = RX;
 #else
-const uint8_t X_pin = XL_pin;
-const uint8_t Y_pin = XR_pin;
+const uint8_t X_pin = RY;
+const uint8_t Y_pin = LX;
 #endif
 
 const uint8_t calibReadings = CALIB_READINGS;
@@ -31,9 +35,11 @@ const uint8_t XY_Threshold = XY_THRESHOLD; // Ignore values inside XY_Threshold
 const uint8_t smoothnessX = SMOOTHNESS_X; // Number of readings to average
 const uint8_t smoothnessY = SMOOTHNESS_Y; // Number of readings to average
 
-RF24 radio(13, 3);
+
+
+RF24 radio(RADIO_CE_PIN, RADIO_CS_PIN);
 uint8_t address[][6] = {"R", "C"};
-bool radioNumber = true;
+uint8_t radioNumber = 0;
 struct calibData {
     int16_t XMid;
     int16_t YMid;
@@ -94,22 +100,19 @@ void readJoystick(int16_t &p1, int16_t &p2) {
 }
 
 void setup() {
-    #ifdef TESTING
-    Serial.begin(115200);
+    #ifdef STDOUT
+    Serial.begin(9600);
     #endif
-    pinMode(LSWITCH_pin, INPUT_PULLUP);
     pinMode(X_pin, INPUT);
     pinMode(Y_pin, INPUT);
-    for (int & i : readingsX) {
-        i = 0;
-    }
-    for (int & i : readingsY) {
-        i = 0;
-    }
+    pinMode(RADIO_CS_PIN, OUTPUT);
+    pinMode(RADIO_CE_PIN, OUTPUT);
+    memset(readingsX, 0, smoothnessX);
+    memset(readingsY, 0, smoothnessY);
     calibrate();
     if (!radio.begin()) {
-    #ifdef TESTING
-        Serial.println(F("radio hardware is not responding!!"));
+    #ifdef STDOUT
+        Serial.println(F("Radio hardware is not responding!!"));
     #endif
         while (!radio.begin()) {
             delay(1);
@@ -120,22 +123,7 @@ void setup() {
     radio.stopListening();
 }
 
-void readSwitch() {
-    static bool toggled = false;
-    bool swPressed = !digitalRead(LSWITCH_pin);
-    if (swPressed) {
-        toggled = true;
-        return;
-    }
-    if (toggled) {
-        LSW = !LSW;
-        digitalWrite(LED_BUILTIN, LSW);
-        toggled = false;
-    }
-}
-
 void loop() {
-    readSwitch();
     int16_t X, Y;
     int16_t XY[2];
     readingsXTotal = readingsXTotal - readingsX[readingsIdxX];
@@ -169,7 +157,7 @@ void loop() {
     XY[0] = readingsXMean;
     XY[1] = readingsYMean;
 
-    #ifdef TESTING
+    #ifdef STDOUT
     Serial << XY[0] << F(", ") << XY[1] << endl;
     #endif
     radio.write(&XY, sizeof(XY));
