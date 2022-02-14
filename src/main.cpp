@@ -39,7 +39,7 @@ const uint8_t smoothnessY = SMOOTHNESS_Y; // Number of readings to average
 
 RF24 radio(RADIO_CE_PIN, RADIO_CS_PIN);
 uint8_t address[][6] = {"R", "C"};
-uint8_t radioNumber = 0;
+uint8_t radioNumber = 1;
 struct calibData {
     int16_t XMid;
     int16_t YMid;
